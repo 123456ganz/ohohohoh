@@ -3,14 +3,12 @@ const { ethers } = require("ethers");
 const TelegramBot = require("node-telegram-bot-api");
 const ABI = require("./abi/liquidlaunch_abi");
 
-// Inisialisasi
 const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
 const contract = new ethers.Contract(process.env.LAUNCHPAD_ADDRESS, ABI, provider);
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: false });
 
 let lastBlock = 0;
 
-// Fungsi format angka agar mudah dibaca
 function formatUnitsPretty(value, decimals = 18) {
   return Number(ethers.formatUnits(value, decimals)).toLocaleString("en-US", {
     maximumFractionDigits: 6,
@@ -21,6 +19,13 @@ function formatEtherPretty(value) {
   return Number(ethers.formatEther(value)).toLocaleString("en-US", {
     maximumFractionDigits: 6,
   });
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 async function startBot() {
@@ -93,8 +98,8 @@ async function startBot() {
         const msg = `
 🚀 <b>New Token Launched!</b>
 
-<b>🪙 Name:</b> ${name}
-<b>🔤 Symbol:</b> ${symbol}
+<b>🪙 Name:</b> ${escapeHtml(name)}
+<b>🔤 Symbol:</b> ${escapeHtml(symbol)}
 <b>📦 Total Supply:</b> ${formatUnitsPretty(totalSupply, decimals)}
 <b>📬 Token Address:</b>
 <code>${token}</code>
@@ -105,12 +110,39 @@ async function startBot() {
 <b>💰 HYPE Balance:</b> ${formatEtherPretty(creatorHypeBalance)} HYPE
 <b>🛒 Initial Purchase:</b> ${formatUnitsPretty(initialPurchaseAmount, decimals)} tokens
 
+📝 <b>Description:</b> ${escapeHtml(description || 'Not available')}
 🌐 <b>Website:</b> ${website || 'Not available'}
 💬 <b>Telegram:</b> ${telegram || 'Not available'}
 🐦 <b>Twitter:</b> ${twitter || 'Not available'}
 `.trim();
 
-        await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, msg, { parse_mode: "HTML" });
+        const inlineKeyboard = {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "🛒 LiquidLaunch", url: `https://liquidlaunch.app/token/${token}` }
+              ],
+              [
+                { text: "🕵️ Scan Creator", url: `https://www.hyperscan.com/address/${creator}` },
+                { text: "🔍 Scan Token", url: `https://www.hyperscan.com/token/${token}` }
+              ],
+              [
+                { text: "🎯 Sniper Bot", url: `https://t.me/HyperEVMSniperBot?start=${token}` }
+              ]
+            ]
+          },
+          parse_mode: "HTML"
+        };
+
+        if (image_uri && image_uri.startsWith("http")) {
+          await bot.sendPhoto(process.env.TELEGRAM_CHAT_ID, image_uri, {
+            caption: msg,
+            ...inlineKeyboard
+          });
+        } else {
+          await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, msg, inlineKeyboard);
+        }
+
         console.log(`[+] Token baru dikirim ke Telegram: ${name} (${symbol})`);
       }
 
@@ -122,5 +154,3 @@ async function startBot() {
 }
 
 startBot();
-
-
